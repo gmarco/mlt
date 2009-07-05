@@ -89,6 +89,7 @@ static int filter_get_image( mlt_frame this, uint8_t **image, mlt_image_format *
 					if (x+x1<w && x+x1>0){
 						uint8_t* pixel=(*image+(y)*w*2+(x+x1)*2);
 						double diff=1.0-fabs(x)/dx;
+						diff*=((double)(rand()%10)/10.0);
 						switch(type){
 							case 1: //blackline
 								*pixel-=((double)*pixel*diff*maxdarker/100.0);
