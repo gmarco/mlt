@@ -91,6 +91,9 @@ vc es_estimate(es_ctx *es, unsigned char *fr) {
         KLTTrackFeatures(
             es->tc, es->fr[0], es->fr[1], es->nc, es->nr, es->fl
             );
+        //KLTReplaceLostFeatures(
+        //    es->tc, es->fr[1], es->nc, es->nr, es->fl
+        //    );
 
         es->nv = 0;
 

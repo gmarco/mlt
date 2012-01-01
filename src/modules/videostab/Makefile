@@ -11,7 +11,7 @@ LDFLAGS += -L../../framework -lmlt -lm
 TARGET = ../libmltvideostab$(LIBSUF)
 
 OBJS = factory.o \
-	   filter_videostab.o filter_videostab2.o \
+	   filter_videostab.o filter_videostab2.o filter_videotrack.o\
 	   stabilize.o transform.o transform_image.o tlist.o\
 		stab/klt/convolve.o           stab/klt/klt.o                stab/klt/pyramid.o            stab/klt/trackFeatures.o \
 		stab/klt/error.o              stab/klt/klt_util.o           stab/klt/selectGoodFeatures.o \
