@@ -164,6 +164,9 @@ void interpolateLin(unsigned char *rv, float x, float y,
                     unsigned char* img, int width, int height,
                     unsigned char def,unsigned char N, unsigned char channel)
 {
+    if (x < 1 || x > width-2 || y < 1 || y > height - 2) {
+        interpolateBiLinBorder(rv, x,y,img,width,height,def,N,channel);
+    } else {
     int x_f = myfloor(x);
     int x_c = x_f+1;
     int y_n = myround(y);
@@ -171,15 +174,20 @@ void interpolateLin(unsigned char *rv, float x, float y,
     float v2 = PIXELN(img, x_f, y_n, width, height, N, channel,def);
     float s  = v1*(x - x_f) + v2*(x_c - x);
     *rv = (unsigned char)s;
+    }
 }
 
 /** interpolateZero: nearest neighbor interpolation function, see interpolate */
 void interpolateZero(unsigned char *rv, float x, float y,
                    unsigned char* img, int width, int height, unsigned char def,unsigned char N, unsigned char channel)
 {
+    if (x < 1 || x > width-2 || y < 1 || y > height - 2) {
+        interpolateBiLinBorder(rv, x,y,img,width,height,def,N,channel);
+    } else {
     int x_n = myround(x);
     int y_n = myround(y);
     *rv = (unsigned char) PIXELN(img, x_n, y_n, width, height, N,channel,def);
+    }
 }
 
 
