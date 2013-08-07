@@ -29,13 +29,17 @@
 #include <sys/stat.h>
 #include <string.h>
 
-#include "stabilize.h"
+//#include "vid.stab/src/transform.h"
+#include "vid.stab/src/libvidstab.h"
 #include "transform_image.h"
+#include "stabilize.h"
 
 typedef struct {
 	StabData* stab;
 	TransformData* trans;
+	Transformations* td;
 	int initialized;
+	int current;
 	void* parent;
 } videostab2_data;
 
@@ -46,7 +50,7 @@ static void serialize_vectors( videostab2_data* self, mlt_position length )
 	{
 		struct mlt_geometry_item_s item;
 		mlt_position i;
-
+		int  m=0;
 		// Initialize geometry item
 		item.key = item.f[0] = item.f[1] = item.f[2] = item.f[3] = 1;
 		item.f[4] = 0;
@@ -65,6 +69,7 @@ static void serialize_vectors( videostab2_data* self, mlt_position length )
 					item.h=t->zoom;
 					transform_data=transform_data->next;
 				}
+				m++;
 			}
 			// Add the geometry item
 			mlt_geometry_insert( g, &item );
@@ -72,8 +77,13 @@ static void serialize_vectors( videostab2_data* self, mlt_position length )
 
 		// Put the analysis results in a property
 		mlt_geometry_set_length( g, length );
+		char *t=mlt_geometry_serialise(g);
+		printf("put vectors s=%s\nl=%d\nm=%d\n",t,length,m);
 		mlt_properties_set_data( MLT_FILTER_PROPERTIES( (mlt_filter) self->parent ), "vectors", g, 0,
 			(mlt_destructor) mlt_geometry_close, (mlt_serialiser) mlt_geometry_serialise );
+		mlt_properties_set_data( MLT_FILTER_PROPERTIES( (mlt_filter) self->parent ),"vectors2",strdup(t),strlen(t)/4,NULL,NULL);
+		mlt_properties_dump( MLT_FILTER_PROPERTIES( (mlt_filter) self->parent),stderr);
+		mlt_properties_set_int( MLT_FILTER_PROPERTIES((mlt_filter) self->parent), "fu_u2", strlen(t) );
 	}
 }
 // scale zoom implements the factor that the vetcors must be scaled since the vector is calulated for real with, now we need it for (scaled)width
@@ -115,9 +125,10 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 {
 	mlt_filter filter = mlt_frame_pop_service( frame );
 	char *vectors = mlt_properties_get( MLT_FILTER_PROPERTIES(filter), "vectors" );
-	*format = mlt_image_yuv422;
+	*format = mlt_image_yuv420p;
 	if (vectors)
-		*format= mlt_image_rgb24;
+		*format = mlt_image_yuv420p;
+		//*format= mlt_image_rgb24;
 	mlt_properties_set_int( MLT_FRAME_PROPERTIES(frame), "consumer_deinterlace", 1 );
 	int error = mlt_frame_get_image( frame, image, format, width, height, 1 );
 
@@ -139,25 +150,36 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 			{
 				// Initialize our context
 				data->initialized = 1;
-				data->stab->width=w;
-				data->stab->height=h;
-				if (*format==mlt_image_yuv420p) data->stab->framesize=w*h* 3/2;//( mlt_image_format_size ( *format, w,h , 0) ; // 3/2 =1 too small
-				if (*format==mlt_image_yuv422) data->stab->framesize=w*h;
-				data->stab->shakiness = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "shakiness" );
-				data->stab->accuracy = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "accuracy" );
-				data->stab->stepsize = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "stepsize" );
-				data->stab->algo = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "algo" );
-				data->stab->show = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "show" );
-				data->stab->contrast_threshold = mlt_properties_get_double( MLT_FILTER_PROPERTIES(filter) , "mincontrast" );
-				stabilize_configure(data->stab);
+				MotionDetect *md=&(data->stab->md);
+				VSFrameInfo fi;
+				initFrameInfo(&fi,w,h,PF_YUV420P);
+				md->shakiness = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "shakiness" );
+				md->accuracy = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "accuracy" );
+				md->stepSize = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "stepsize" );
+				md->algo = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "algo" );
+				md->show = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter) , "show" );
+				md->contrastThreshold = mlt_properties_get_double( MLT_FILTER_PROPERTIES(filter) , "mincontrast" );
+				//stabilize_configure(data->stab);
+				if (initMotionDetect(md,&fi,"videostab2")!=0){
+					mlt_log_warning(NULL,"error in initMotionDetect");
+					return -1;
+				}
+				if (configureMotionDetect(md)!=0){
+					mlt_log_warning(NULL,"error in configureMotionDetect");
+					return -1;
+				}
 			}
 				// Analyse
 				mlt_position pos = mlt_filter_get_position( filter, frame );
-				stabilize_filter_video ( data->stab , *image, *format );
+				if (stabilize_filter_video ( data->stab , *image, *format )!=0){
+					return -1;
+				}
+
 
 				// On last frame
 				if ( pos == length - 1 )
 				{
+					printf ("fin\n");
 					serialize_vectors( data , length );
 				}
 		}
@@ -173,6 +195,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 					data->initialized = 2;
 
 					int interp = 2;
+					int framesize=0;
 					float scale_zoom=1.0;
 					if ( *width != mlt_properties_get_int( MLT_FRAME_PROPERTIES( frame ), "meta.media.width" ) )
 						scale_zoom = (float) *width / (float) mlt_properties_get_int( MLT_FRAME_PROPERTIES( frame ), "meta.media.width" );
@@ -187,26 +210,30 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 					else if ( strcmp( interps, "bicublin" ) == 0 )
 						interp = 4;
 
-					data->trans->interpoltype = interp;
+					data->trans->interpolType = interp;
 					data->trans->smoothing = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "smoothing" );
-					data->trans->maxshift = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "maxshift" );
-					data->trans->maxangle = mlt_properties_get_double( MLT_FILTER_PROPERTIES(filter), "maxangle" );
+					data->trans->maxShift = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "maxshift" );
+					data->trans->maxAngle = mlt_properties_get_double( MLT_FILTER_PROPERTIES(filter), "maxangle" );
 					data->trans->crop = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "crop" );
 					data->trans->invert = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "invert" );
 					data->trans->relative = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "relative" );
 					data->trans->zoom = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "zoom" );
-					data->trans->optzoom = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "optzoom" );
+					data->trans->optZoom = mlt_properties_get_int( MLT_FILTER_PROPERTIES(filter), "optzoom" );
 					data->trans->sharpen = mlt_properties_get_double( MLT_FILTER_PROPERTIES(filter), "sharpen" );
 
-					transform_configure(data->trans,w,h,*format ,*image, deserialize_vectors(  vectors, length , scale_zoom ),length);
+					data->td->ts=deserialize_vectors(  vectors, length , scale_zoom );
+					
+					framesize=w*h*3;
+					transform_configure(data->trans,w,h,*format ,*image, data->td,length,framesize);
 
 				}
 				if ( data->initialized == 2 )
 				{
 					// Stabilize
 					float pos = mlt_filter_get_position( filter, frame );
-					data->trans->current_trans=pos;
-					transform_filter_video(data->trans, *image, *format );
+					data->td->current=pos;
+
+					transform_filter_video(data->trans,data->td,(unsigned char*)*image,*format,w*h*3);
 
 				}
 		}
@@ -229,7 +256,7 @@ static void filter_close( mlt_filter parent )
 	if (data){
 		if (data->stab) stabilize_stop(data->stab);
 		if (data->trans){
-			if (data->trans->src) free(data->trans->src);
+			//TODO if (data->trans->src) free(data->trans->src);
 			free (data->trans);
 		}
 		free( data );
@@ -240,7 +267,7 @@ static void filter_close( mlt_filter parent )
 
 mlt_filter filter_videostab2_init( mlt_profile profile, mlt_service_type type, const char *id, char *arg )
 {
-	videostab2_data* data= calloc( 1, sizeof(videostab2_data));
+	videostab2_data * data= calloc( 1, sizeof(videostab2_data));
 	if ( data )
 	{
 		data->stab = calloc( 1, sizeof(StabData) );
@@ -254,6 +281,13 @@ mlt_filter filter_videostab2_init( mlt_profile profile, mlt_service_type type, c
 		if ( !data->trans )
 		{
 			free( data->stab );
+			free( data );
+			return NULL;
+		}
+		data->td = calloc( 1, sizeof (Transformations) ) ;
+		if ( !data->td )
+		{
+			free( data->td );
 			free( data );
 			return NULL;
 		}
@@ -271,6 +305,7 @@ mlt_filter filter_videostab2_init( mlt_profile profile, mlt_service_type type, c
 		parent->close = filter_close;
 		parent->process = filter_process;
 		data->parent = parent;
+		data->trans->modName = "mlt-videostab2";
 		//properties for stabilize
 		mlt_properties_set( MLT_FILTER_PROPERTIES(parent), "shakiness", "4" );
 		mlt_properties_set( MLT_FILTER_PROPERTIES(parent), "accuracy", "4" );

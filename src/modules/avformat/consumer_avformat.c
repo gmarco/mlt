@@ -1442,7 +1442,7 @@ static void *consumer_thread( void *arg )
 	if ( video_st )
 		converted_avframe = alloc_picture( video_st->codec->pix_fmt, width, height );
 
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 	// Allocate audio AVFrame
 	if ( audio_st[0] )
 	{
@@ -1685,7 +1685,7 @@ static void *consumer_thread( void *arg )
 							// Write the compressed frame in the media file
 							if ( pkt.pts != AV_NOPTS_VALUE )
 								pkt.pts = av_rescale_q( pkt.pts, codec->time_base, stream->time_base );
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 							if ( pkt.dts != AV_NOPTS_VALUE )
 								pkt.dts = av_rescale_q( pkt.dts, codec->time_base, stream->time_base );
 							if ( pkt.duration > 0 )
@@ -1833,7 +1833,7 @@ static void *consumer_thread( void *arg )
 						converted_avframe->pts = frame_count;
 
 	 					// Encode the image
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 						int got_packet;
 						ret = avcodec_encode_video2( c, &pkt, converted_avframe, &got_packet );
 						if ( ret < 0 )
@@ -1852,7 +1852,7 @@ static void *consumer_thread( void *arg )
 						{
 							if ( pkt.pts != AV_NOPTS_VALUE )
 								pkt.pts = av_rescale_q( pkt.pts, c->time_base, video_st->time_base );
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 							if ( pkt.dts != AV_NOPTS_VALUE )
 								pkt.dts = av_rescale_q( pkt.dts, c->time_base, video_st->time_base );
 #endif
@@ -1944,7 +1944,7 @@ static void *consumer_thread( void *arg )
 				else if ( c->sample_fmt == AV_SAMPLE_FMT_U8P )
 					p = interleaved_to_planar( audio_input_nb_samples, channels, p, sizeof( uint8_t ) );
 #endif
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 				pkt.size = audio_outbuf_size;
 				audio_avframe->nb_samples = audio_input_nb_samples;
 				avcodec_fill_audio_frame( audio_avframe, c->channels, c->sample_fmt,
@@ -1965,7 +1965,7 @@ static void *consumer_thread( void *arg )
 #endif
 			}
 			if ( pkt.size <= 0 ) {
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 				pkt.size = audio_outbuf_size;
 				int got_packet = 0;
 				int ret = avcodec_encode_audio2( c, &pkt, NULL, &got_packet );
@@ -1986,7 +1986,7 @@ static void *consumer_thread( void *arg )
 			// Write the compressed frame in the media file
 			if ( pkt.pts != AV_NOPTS_VALUE )
 				pkt.pts = av_rescale_q( pkt.pts, c->time_base, audio_st[0]->time_base );
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 			if ( pkt.dts != AV_NOPTS_VALUE )
 				pkt.dts = av_rescale_q( pkt.dts, c->time_base, audio_st[0]->time_base );
 			if ( pkt.duration > 0 )
@@ -2011,7 +2011,7 @@ static void *consumer_thread( void *arg )
 			pkt.size = video_outbuf_size;
 
 			// Encode the image
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 			int got_packet = 0;
 			int ret = avcodec_encode_video2( c, &pkt, NULL, &got_packet );
 			if ( ret < 0 )
@@ -2030,7 +2030,7 @@ static void *consumer_thread( void *arg )
 
 			if ( pkt.pts != AV_NOPTS_VALUE )
 				pkt.pts = av_rescale_q( pkt.pts, c->time_base, video_st->time_base );
-#if LIBAVCODEC_VERSION_MAJOR >= 55
+#if LIBAVCODEC_VERSION_MAJOR >= 54
 			if ( pkt.dts != AV_NOPTS_VALUE )
 				pkt.dts = av_rescale_q( pkt.dts, c->time_base, video_st->time_base );
 #endif
